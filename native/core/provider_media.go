@@ -181,6 +181,16 @@ func (d *Downloader) resolveProviderMedia(ctx context.Context, task Task) (provi
 		}
 	}
 	if chapter.PageURL != "" && (chapter.Source == sourceHuangguoAI || chapter.Source == sourceHuangguoVideo) {
+		_, sourceID, valid := splitProviderDramaID(task.DramaID)
+		episode := chapterEpisodeNumber(chapter, task.Index)
+		if chapter.Source == sourceHuangguoAI {
+			if !valid {
+				return providerMedia{}, fmt.Errorf("黄果 AI 剧集身份无效")
+			}
+			if err := validateAIPageIdentity("", chapter.PageURL, sourceID, episode); err != nil {
+				return providerMedia{}, err
+			}
+		}
 		responses := &playbackResponseURLs{}
 		pageContext := context.WithValue(ctx, playbackResponseURLsKey{}, responses)
 		body, err := d.fetchProviderText(pageContext, chapter.PageURL, media.Referer)
@@ -192,6 +202,9 @@ func (d *Downloader) resolveProviderMedia(ctx context.Context, task Task) (provi
 			pageURL = actual.(string)
 		}
 		if chapter.Source == sourceHuangguoAI {
+			if err := validateAIPageIdentity(body, pageURL, sourceID, episode); err != nil {
+				return providerMedia{}, err
+			}
 			media.URL = parseAIVideoURL(body, pageURL)
 		} else {
 			media.URL = parseDataHLS(body, pageURL)

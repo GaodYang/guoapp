@@ -45,6 +45,7 @@ type nativeStreamServer struct {
 	address    string
 	sessions   map[string]*nativeStreamSession
 	server     *http.Server
+	done       chan struct{}
 }
 
 func (stream *nativeStreamServer) nativeRequest(request *http.Request) (*http.Response, error) {
@@ -60,11 +61,40 @@ func newNativeStreamServer(d *Downloader) (*nativeStreamServer, error) {
 	if err != nil {
 		return nil, errors.New("无法初始化本机播放器")
 	}
-	stream := &nativeStreamServer{downloader: d, address: "http://" + listener.Addr().String(), sessions: map[string]*nativeStreamSession{}}
+	stream := &nativeStreamServer{downloader: d, address: "http://" + listener.Addr().String(), sessions: map[string]*nativeStreamSession{}, done: make(chan struct{})}
 	server := &http.Server{Handler: http.HandlerFunc(stream.nativeServe), ReadHeaderTimeout: 5 * time.Second, IdleTimeout: 30 * time.Second, MaxHeaderBytes: 16384}
 	stream.server = server
-	go func() { _ = server.Serve(listener) }()
+	d.recordDiagnostic(diagnosticEvent{Event: "native_stream_started", Level: "info", Host: "127.0.0.1", Message: "本机媒体代理已启动：" + stream.address})
+	go func() {
+		err := server.Serve(listener)
+		stream.mu.Lock()
+		for token, session := range stream.sessions {
+			session.cancel()
+			delete(stream.sessions, token)
+		}
+		stream.mu.Unlock()
+		close(stream.done)
+		level := "error"
+		if errors.Is(err, http.ErrServerClosed) {
+			level = "info"
+		}
+		d.recordDiagnostic(diagnosticEvent{Event: "native_stream_stopped", Level: level, Host: "127.0.0.1", Message: "本机媒体代理已停止：" + err.Error()})
+	}()
 	return stream, nil
+}
+
+func (stream *nativeStreamServer) nativeAlive() bool {
+	select {
+	case <-stream.done:
+		return false
+	default:
+	}
+	connection, err := net.DialTimeout("tcp4", strings.TrimPrefix(stream.address, "http://"), 300*time.Millisecond)
+	if err != nil {
+		return false
+	}
+	connection.Close()
+	return true
 }
 
 func (stream *nativeStreamServer) nativeOpen(media providerMedia) (string, string) {

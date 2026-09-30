@@ -2,6 +2,7 @@ package core
 
 import (
 	"bytes"
+	"context"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -139,5 +140,40 @@ func TestNativeMP4PlaylistWordsInURL(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestNativePlaybackRestartsClosedStreamServer(t *testing.T) {
+	engine, err := newNativeEngine(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		if engine.stream != nil {
+			engine.stream.server.Close()
+		}
+	}()
+	media := providerMedia{URL: "https://example.test/video.m3u8", Playlist: "#EXTM3U\n#EXT-X-ENDLIST\n"}
+	previousURL := ""
+	for attempt := 0; attempt < 3; attempt++ {
+		plan, err := engine.nativeOpenPlayback(context.Background(), nativePlaybackChoices(media, 0))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if plan.URL == previousURL {
+			t.Fatal("stopped server address reused")
+		}
+		response, err := http.Get(plan.URL)
+		if err != nil {
+			t.Fatal("playback published an unavailable local server", err)
+		}
+		body, err := io.ReadAll(response.Body)
+		response.Body.Close()
+		if err != nil || response.StatusCode != http.StatusOK || !strings.HasPrefix(string(body), "#EXTM3U") {
+			t.Fatal("recovered playlist failed", response.StatusCode, err)
+		}
+		previousURL = plan.URL
+		engine.stream.server.Close()
+		engine.nativeReleasePlayback(plan.Session)
 	}
 }
