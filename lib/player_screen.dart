@@ -234,6 +234,7 @@ class _PlayerScreenState extends State<PlayerScreen>
       _player.stream.error.listen((error) {
         if (_enhancement.handlePlaybackError(error)) return;
         if (!_closed && _acceptErrors && mounted && error.trim().isNotEmpty) {
+          DiaryService.add('[Play] 播放器错误: $error');
           _queueRecovery();
         }
       }),
