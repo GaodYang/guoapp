@@ -25,7 +25,7 @@ import 'diary_service.dart';
 Future<void> main(List<String> arguments) async {
   WidgetsFlutterBinding.ensureInitialized();
   DiaryService.add(
-    '[App] 应用启动，版本: $appVersion+$appBuildNumber, 平台: ${Platform.operatingSystem}',
+    '[App] 应用启动，版本: $appVersion+$appReleaseBuildNumber, 平台: ${Platform.operatingSystem}',
   );
   if (Platform.isAndroid) {
     await SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
