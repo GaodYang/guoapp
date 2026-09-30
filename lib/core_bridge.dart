@@ -9,6 +9,7 @@ import 'package:path/path.dart' as path;
 import 'package:path_provider/path_provider.dart';
 
 import 'models.dart';
+import 'diary_service.dart';
 import 'danmaku_models.dart';
 import 'background_downloads.dart';
 import 'local_store.dart';
@@ -710,9 +711,25 @@ class NativeRepository extends AppRepository {
   }
 
   @override
-  Future<DramaDetail> detail(Drama drama) async => DramaDetail.fromJson(
-    await _call({'action': 'detail', 'drama': drama.toJson()}),
-  );
+  Future<DramaDetail> detail(Drama drama) async {
+    final elapsed = Stopwatch()..start();
+    DiaryService.add('[Detail] 开始加载：站源=${drama.source}，剧集=${drama.id}');
+    try {
+      final detail = DramaDetail.fromJson(
+        await _call({'action': 'detail', 'drama': drama.toJson()}),
+      );
+      DiaryService.add(
+        '[Detail] 加载成功：站源=${drama.source}，分集=${detail.episodes.length}，耗时=${elapsed.elapsedMilliseconds}ms',
+      );
+      return detail;
+    } catch (error) {
+      DiaryService.add(
+        '[Detail] 加载失败：站源=${drama.source}，耗时=${elapsed.elapsedMilliseconds}ms，错误=$error',
+      );
+      rethrow;
+    }
+  }
+
   @override
   Future<PlaybackPlan> resolve(
     Drama drama,

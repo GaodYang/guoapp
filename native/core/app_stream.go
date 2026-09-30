@@ -95,7 +95,7 @@ func (stream *nativeStreamServer) nativeOpen(media providerMedia) (string, strin
 	stream.sessions[token] = session
 	stream.mu.Unlock()
 	entry := nativeStreamAsset{address: media.URL, contentType: "video/mp4"}
-	isHLS := media.Playlist != "" || len(media.HLSKey) > 0 || strings.Contains(strings.ToLower(media.URL), "m3u8") || strings.Contains(strings.ToLower(media.URL), "hls")
+	isHLS := media.Playlist != ""
 	if isHLS {
 		entry.contentType = "application/vnd.apple.mpegurl"
 	}

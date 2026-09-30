@@ -300,6 +300,10 @@ func NativeRequest(raw string) (result string) {
 	envelope := map[string]any{"ok": err == nil}
 	if err != nil {
 		envelope["error"] = publicError(err).Error()
+		if input.Action == "detail" && errors.Is(err, context.DeadlineExceeded) {
+			envelope["error"] = "加载分集目录超时，请检查网络后重试"
+			envelope["code"] = "detail_timeout"
+		}
 		if errors.Is(err, errNativeLocalFile) {
 			envelope["code"] = "local_media"
 		}

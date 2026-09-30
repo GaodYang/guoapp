@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestNativeHLSSegmentPreservesBytesRangeAndContentType(t *testing.T) {
@@ -97,6 +98,44 @@ func TestNativeHLSSegmentPreservesBytesRangeAndContentType(t *testing.T) {
 				}
 				if method == http.MethodGet && !bytes.Equal(body, segment) {
 					t.Fatal("encrypted segment bytes changed")
+				}
+			}
+		})
+	}
+}
+
+func TestNativeMP4PlaylistWordsInURL(t *testing.T) {
+	for _, addressPath := range []string{"/video.mp4?format=hls&name=m3u8", "/hls/video.mp4", "/video?format=hls"} {
+		t.Run(addressPath, func(t *testing.T) {
+			media := append([]byte{0, 0, 0, 24, 'f', 't', 'y', 'p', 'i', 's', 'o', 'm'}, bytes.Repeat([]byte{0xa5}, 1024)...)
+			upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Content-Type", "video/mp4")
+				http.ServeContent(w, r, "video.mp4", time.Time{}, bytes.NewReader(media))
+			}))
+			defer upstream.Close()
+			downloader := sourceFixtureDownloader(t, nil)
+			downloader.client = upstream.Client()
+			stream, err := newNativeStreamServer(downloader)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer stream.server.Close()
+			address, token := stream.nativeOpen(providerMedia{URL: upstream.URL + addressPath})
+			defer stream.nativeRelease(token)
+			for _, method := range []string{http.MethodGet, http.MethodHead} {
+				request, _ := http.NewRequest(method, address, nil)
+				request.Header.Set("Range", "bytes=0-31")
+				response, err := http.DefaultClient.Do(request)
+				if err != nil {
+					t.Fatal(err)
+				}
+				body, err := io.ReadAll(response.Body)
+				response.Body.Close()
+				if err != nil || response.StatusCode != http.StatusPartialContent || response.Header.Get("Content-Type") != "video/mp4" || response.Header.Get("Content-Range") != "bytes 0-31/1036" {
+					t.Fatalf("%s failed: status=%d type=%q range=%q body=%q err=%v", method, response.StatusCode, response.Header.Get("Content-Type"), response.Header.Get("Content-Range"), body, err)
+				}
+				if method == http.MethodGet && !bytes.Equal(body, media[:32]) {
+					t.Fatal("MP4 bytes changed")
 				}
 			}
 		})
