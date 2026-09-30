@@ -37,6 +37,8 @@ jobs:
           xcrun --sdk iphoneos --show-sdk-path
           pod --version
           flutter --version
+      - name: Resolve dependencies added upstream
+        run: flutter pub get
       - name: Build all sources unsigned IPA
         run: python3 scripts/build_ios.py --all-sources
       - name: Upload iOS installation package
@@ -47,5 +49,6 @@ jobs:
             dist/ios/zhenguojian-*-ios-unsigned.ipa
             dist/ios/zhenguojian-*-ios-unsigned-app.zip
             dist/ios/SHA256SUMS.txt
+            pubspec.lock
           if-no-files-found: error
           retention-days: 7
